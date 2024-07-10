@@ -1,14 +1,51 @@
 import React, { useState, useEffect } from 'react';
+import { getGitHubAuthUrl, getAccessToken } from './oauth';
+import { getIssues, createIssue } from './api';
 import axios from 'axios';
 import './App.css';
 
 function App() {
+  const [token, setToken] = useState(null);
+  const [issues, setIssues] = useState([]);
   const [todos, setTodos] = useState([]);
   const [newTodo, setNewTodo] = useState('');
 
   useEffect(() => {
-    fetchTodos();
+    const code = new URLSearchParams(window.location.search).get('code');
+    if (code && !token) {
+      fetchAccessToken(code);
+    }
+    // fetchTodos();
   }, []);
+
+  useEffect(() => {
+    if (token) {
+      fetchIssues();
+    }
+  }, [token]);
+
+  const fetchAccessToken = async (code) => {
+    const accessToken = await getAccessToken(code);
+    setToken(accessToken);
+    window.history.pushState({}, '', '/'); // Clean up url
+  };
+
+  const fetchIssues = async () => {
+    const data = await getIssues(token, 'flyingoctopus', 'vfs-react-todo-app');
+    setIssues(data);
+  }
+
+  const handleLogin = () => {
+    window.location.href = getGitHubAuthUrl();
+  };
+
+  const handleAddTodo = async () => {
+    if (newTodo) {
+      const issue = await createIssue(token, 'flyingoctopus', 'vfs-react-todo-app');
+      setIssues([...issues, issue]);
+      setNewTodo('');
+    }
+  };
 
   const fetchTodos = async () => {
     try {
@@ -57,34 +94,27 @@ function App() {
 
   return (
     <div className="App">
-      <h1>To-Do List</h1>
-      <div>
-        {todos.map(todo => (
-          <div key={todo.id} className="todo">
-            <p className={todo.completed ? 'completed' : ''}><strong>ID:</strong> {todo.id}</p>
-            <p className={todo.completed ? 'completed' : ''}><strong>Title:</strong> {todo.title}</p>
-            <p className={todo.completed ? 'completed' : ''}><strong>Completed:</strong> {todo.completed ? 'Yes' : 'No'}</p>
-            <button onClick={() => toggleComplete(todo.id)}>
-              {todo.completed ? 'Mark Incomplete' : 'Mark Complete'}
-            </button>
-            <button onClick={() => deleteTodo(todo.id)}>Delete</button>
-          </div>
-        ))}
-      </div>
-      <h2>Add To-Do</h2>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="title">Title:</label>
+      {!token ? (
+        <button onClick={handleLogin}>Login with Github</button>
+      ) : (
+        <div>
+        <h1>TODOs</h1>
+        <ul>
+          {issues.map((issue) => (
+            <li key={issue.id}>{issue.title}</li>
+          ))}
+        </ul>
         <input
-          type="text"
-          id="title"
-          value={newTodo}
-          onChange={(e) => setNewTodo(e.target.value)}
-          required
+          type="text" 
+          value={newTodo} 
+          onChange={(e) => setNewTodo(e.target.value)} 
+          placeholder="New TODO"
         />
-        <button type="submit">Add To-Do</button>
-      </form>
-    </div>
-  );
-}
+        <button onClick={handleAddTodo}>Add TODO</button>
+        </div>
+      )}
+      </div>
+      );
+    };
 
 export default App;
